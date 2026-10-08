@@ -97,11 +97,6 @@ section[hidden]{display:none}
     <div id="clock"></div>
   </header>
 
-  <div class="tabs">
-    <button id="tabLog" class="on">កត់ត្រា</button>
-    <button id="tabQR">បង្កើត QR</button>
-  </div>
-
   <!-- ===== TAB 1: LOG ===== -->
   <section id="secLog">
     <div id="rows"></div>
@@ -117,25 +112,6 @@ section[hidden]{display:none}
         <button class="btn danger" id="btnClearPhotos">🗑 លុបរូបទាំងអស់</button>
         <button class="btn danger" id="btnReset">↺ ស្តារដើម</button>
       </div>
-    </div>
-  </section>
-
-  <!-- ===== TAB 2: QR ===== -->
-  <section id="secQR" hidden>
-    <div class="card">
-      <h2 id="qrTitle">បង្កើត QR code លេខឡាន</h2>
-      <input id="qrText" class="big" type="text" placeholder="EZ 192" autocomplete="off" autocapitalize="characters">
-      <div class="qrwrap" id="qrWrap"></div>
-      <div class="qrbtns">
-        <button class="btn primary" id="qrPng">⬇️ រក្សាទុក PNG</button>
-        <button class="btn" id="qrAdd">💾 រក្សាទុកក្នុងបញ្ជី</button>
-        <button class="btn danger" id="qrClear">✖ លុប / សម្អាត</button>
-        <button class="btn" id="qrCancel" hidden>បោះបង់ការកែ</button>
-      </div>
-    </div>
-    <div class="card">
-      <h2>QR ដែលបានរក្សាទុក</h2>
-      <div id="qrList"></div>
     </div>
   </section>
 </div>
@@ -205,11 +181,6 @@ function loadLib(key, urls, globalName){
     if(!window[globalName]){ try{ localStorage.removeItem('lib.'+key); }catch(e){} throw new Error('lib-bad'); }
   })();
 }
-const qrLibP = loadLib('qrgen',[
-  'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js'
-],'qrcode');
-qrLibP.catch(()=>{});
 const HAS_DETECTOR = 'BarcodeDetector' in window;
 let jsqrP = null;
 function ensureJsQR(){
@@ -222,7 +193,6 @@ function ensureJsQR(){
   }
   return jsqrP;
 }
-if(!HAS_DETECTOR) ensureJsQR().catch(()=>{});
 
 /* ---------- Data ---------- */
 const LS_ROWS='carlog.rows.v1', LS_QR='carlog.qrs.v1';
@@ -496,8 +466,6 @@ function render(){
     if(lab) main.append(lab);
     main.append(inp);
     if(r.type==='arrive'||r.type==='depart'){
-      main.append(h('button',{class:'scanbox',title:'ប៉ះដើម្បី Scan QR',onclick:()=>openScanner(r.type)},
-        h('span',{},'📷'),'Scan'));
     }
     if(r.type==='arrive'||r.type==='depart'){
       main.append(h('button',{class:'nowbtn',title:'ដាក់ម៉ោងឥឡូវ (មិនប្រើ QR)',onclick:()=>applyScan(r.type,null)},'⏱'));
@@ -722,92 +690,7 @@ $('btnReset').onclick=()=>{
   openIds.clear(); saveRows(); render();
 };
 
-/* ---------- Tabs ---------- */
-function showTab(which){
-  $('secLog').hidden = which!=='log'; $('secQR').hidden = which!=='qr';
-  $('tabLog').classList.toggle('on',which==='log'); $('tabQR').classList.toggle('on',which==='qr');
-  if(which==='qr') drawPreview();
-}
-$('tabLog').onclick=()=>showTab('log');
-$('tabQR').onclick=()=>showTab('qr');
 
-/* ---------- QR generator ---------- */
-function utf8Binary(s){ return String.fromCharCode(...new TextEncoder().encode(s)); }
-async function makeQRCanvas(text){
-  await qrLibP;
-  const qr=qrcode(0,'M'); qr.addData(utf8Binary(text),'Byte'); qr.make();
-  const n=qr.getModuleCount(), scale=12, quiet=4, size=(n+quiet*2)*scale, labelH=100;
-  const c=document.createElement('canvas'); c.width=size; c.height=size+labelH;
-  const x=c.getContext('2d');
-  x.fillStyle='#fff'; x.fillRect(0,0,c.width,c.height);
-  x.fillStyle='#000';
-  for(let r=0;r<n;r++) for(let q=0;q<n;q++) if(qr.isDark(r,q)) x.fillRect((q+quiet)*scale,(r+quiet)*scale,scale,scale);
-  let fs=64; const fam='"Noto Sans Khmer","Khmer OS Battambang",system-ui,sans-serif';
-  x.font='700 '+fs+'px '+fam;
-  while(x.measureText(text).width>size-40 && fs>20){ fs-=2; x.font='700 '+fs+'px '+fam; }
-  x.textAlign='center'; x.textBaseline='middle'; x.fillStyle='#111';
-  x.fillText(text,size/2,size+labelH/2-14);
-  return c;
-}
-let qrList=[]; try{ qrList=JSON.parse(localStorage.getItem(LS_QR))||[]; }catch(e){}
-function saveQR(){ try{ localStorage.setItem(LS_QR,JSON.stringify(qrList)); }catch(e){} }
-let editingId=null, previewFor='';
-async function drawPreview(){
-  const t=$('qrText').value.trim(), wrap=$('qrWrap');
-  previewFor=t;
-  if(!t){ wrap.innerHTML=''; wrap.append(h('div',{class:'hint'},'សរសេរលេខឡាន ដើម្បីបង្កើត QR')); return; }
-  try{
-    const c=await makeQRCanvas(t);
-    if(previewFor!==t) return;
-    wrap.innerHTML=''; wrap.append(c);
-  }catch(e){
-    wrap.innerHTML=''; wrap.append(h('div',{class:'hint'},'⚠️ ត្រូវការអ៊ីនធឺណិតម្តង ដើម្បីទាញ QR library (បន្ទាប់មកប្រើ offline បាន)'));
-  }
-}
-function safeName(s){ return s.replace(/[^\wក-៿-]+/g,'_').replace(/^_+|_+$/g,'')||'qr'; }
-async function downloadPNG(text){
-  try{
-    const c=await makeQRCanvas(text);
-    c.toBlob(b=>{
-      const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='QR-'+safeName(text)+'.png';
-      document.body.append(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),4000);
-      toast('⬇️ បានរក្សាទុក PNG');
-    },'image/png');
-  }catch(e){ toast('បង្កើត QR មិនបាន — ពិនិត្យអ៊ីនធឺណិត'); }
-}
-function renderQRList(){
-  const box=$('qrList'); box.innerHTML='';
-  if(!qrList.length){ box.append(h('div',{class:'hint'},'មិនទាន់មាន')); return; }
-  qrList.forEach(it=>{
-    box.append(h('div',{class:'item'},
-      h('div',{class:'nm'},it.text),
-      h('button',{class:'btn',title:'កែ',onclick:()=>{
-        editingId=it.id; $('qrText').value=it.text; setEditUI(); drawPreview(); window.scrollTo({top:0,behavior:'smooth'});
-      }},'✎'),
-      h('button',{class:'btn',title:'PNG',onclick:()=>downloadPNG(it.text)},'⬇️'),
-      h('button',{class:'btn danger',title:'លុប',onclick:()=>{
-        if(!confirm('លុប '+it.text+'?')) return;
-        qrList=qrList.filter(x=>x.id!==it.id); if(editingId===it.id){ editingId=null; setEditUI(); } saveQR(); renderQRList();
-      }},'🗑')));
-  });
-}
-function setEditUI(){
-  $('qrTitle').textContent = editingId ? 'កែ QR code' : 'បង្កើត QR code លេខឡាន';
-  $('qrAdd').textContent = editingId ? '💾 រក្សាទុកការកែ' : '💾 រក្សាទុកក្នុងបញ្ជី';
-  $('qrCancel').hidden = !editingId;
-}
-$('qrText').addEventListener('input',drawPreview);
-$('qrPng').onclick=()=>{ const t=$('qrText').value.trim(); if(!t) return toast('សូមសរសេរលេខឡានជាមុន'); downloadPNG(t); };
-$('qrAdd').onclick=()=>{
-  const t=$('qrText').value.trim(); if(!t) return toast('សូមសរសេរលេខឡានជាមុន');
-  if(editingId){ const it=qrList.find(x=>x.id===editingId); if(it) it.text=t; }
-  else if(qrList.some(x=>norm(x.text)===norm(t))) return toast('មានរួចហើយក្នុងបញ្ជី');
-  else qrList.unshift({id:uid(),text:t});
-  editingId=null; setEditUI(); saveQR(); renderQRList(); toast('💾 បានរក្សាទុក');
-};
-$('qrClear').onclick=()=>{ $('qrText').value=''; editingId=null; setEditUI(); drawPreview(); $('qrText').focus(); };
-$('qrCancel').onclick=()=>{ $('qrText').value=''; editingId=null; setEditUI(); drawPreview(); };
-renderQRList(); setEditUI();
 
 /* ---------- Live clock ---------- */
 function tickClock(){ $('clock').textContent=nowTime()+' · '+today(); }
