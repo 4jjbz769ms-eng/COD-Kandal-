@@ -679,10 +679,13 @@ $('btnCopy').onclick=async()=>{
   try{ await navigator.clipboard.writeText(t); toast('បានចម្លង'); }
   catch(e){ const ta=h('textarea',{},t); document.body.append(ta); ta.select(); try{document.execCommand('copy');toast('បានចម្លង');}catch(_){toast('ចម្លងមិនបាន');} ta.remove(); }
 };
-$('btnSave').onclick=()=>{ saveRows(); toast('💾 បានរក្សាទុក'); };
+$('btnSave').onclick=()=>{ saveRows(); saveCaps(); toast('💾 បានរក្សាទុក'); };
 $('btnReset').onclick=()=>{
-  if(!confirm('ស្តារទៅលំនាំដើម? ការកែប្រែទាំងអស់នឹងបាត់')) return;
-  rows=defaults(); openIds.clear(); saveRows(); render();
+  if(!confirm('ស្តារទៅលំនាំដើម? (ក្រឡាលេខឡាន និងបញ្ជីលេខឡាន មិនប៉ះពាល់ទេ)')) return;
+  const keepCar=rows.find(r=>r.type==='car');      /* car number box stays exactly as the user left it */
+  rows=defaults();
+  if(keepCar){ const i=rows.findIndex(r=>r.type==='car'); if(i>=0) rows[i]=keepCar; }
+  openIds.clear(); saveRows(); render();
 };
 
 /* ---------- Tabs ---------- */
