@@ -27,6 +27,16 @@ section[hidden]{display:none}
 .scanbox span{font-size:22px}
 .scanbox:active{background:#dbe7ff}
 .gear{flex:0 0 auto;border:0;background:transparent;font-size:18px;color:var(--mut);cursor:pointer;padding:6px}
+.nowbtn{flex:0 0 auto;border:1px solid var(--line);background:#fff;border-radius:10px;font-size:18px;padding:5px 8px;cursor:pointer;line-height:1.2}
+.nowbtn:active{background:#eef2f8}
+.presets{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:6px}
+.prow{display:flex;align-items:center;gap:8px}
+.pradio{flex:0 0 auto;width:22px;height:22px;accent-color:var(--acc)}
+.plab{flex:0 0 auto;font-size:15px;color:var(--mut)}
+.ptext{flex:1;min-width:0;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:17px;font-weight:600;color:var(--ink)}
+.pdel{padding:6px 10px}
+.addcar{width:100%}
+.btn:disabled{opacity:.45;cursor:default}
 .tools{display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--line);gap:10px;flex-direction:column}
 .row.open .tools{display:flex}
 .tools .t{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--mut)}
@@ -125,7 +135,8 @@ section[hidden]{display:none}
     <div class="status" id="scanStatus"></div>
     <div class="sheetBtns">
       <button class="btn primary" id="camBtn">📷 បើក Camera Scan</button>
-      <button class="btn" id="nowBtn">⏱ ដាក់ម៉ោងឥឡូវ (មិនប្រើ QR)</button>
+      <button class="btn" id="photoBtn">🖼 ថតរូប QR ជំនួស (បើ Camera ខាងលើមិនបើក)</button>
+      <input type="file" id="photoIn" accept="image/*" capture="environment" hidden>
     </div>
   </div>
 </div>
@@ -138,6 +149,7 @@ const pad = n => String(n).padStart(2,'0');
 const nowTime = () => { const d=new Date(); return pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds()); };
 const today = () => { const d=new Date(); return pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear(); };
 const uid = () => Math.random().toString(36).slice(2,9);
+const norm = s => (s||'').replace(/\s+/g,'').toUpperCase();
 
 function h(tag, attrs, ...kids){
   const el = document.createElement(tag);
@@ -193,9 +205,11 @@ if(!HAS_DETECTOR) ensureJsQR().catch(()=>{});
 
 /* ---------- Data ---------- */
 const LS_ROWS='carlog.rows.v1', LS_QR='carlog.qrs.v1';
+const MAX_CARS = 5;
+const defaultPresets = () => ['EZ 194','M 15','M 89','G 179','M G45'].map(t=>({id:uid(),text:t}));
 const defaults = () => [
   {id:uid(),type:'text', label:'',                 value:'វីរះប៊ុនថាំ ត្មាតពង (KS)', size:26,color:'#1c2430'},
-  {id:uid(),type:'car',  label:'លេខឡាន',           value:'EZ 192',                    size:24,color:'#1c2430'},
+  {id:uid(),type:'car',  label:'លេខឡាន',           value:'EZ 192', presets:defaultPresets(), size:24,color:'#1c2430'},
   {id:uid(),type:'arrive',label:'ឡានមកដល់ម៉ោង:',   value:'',                          size:24,color:'#15803d'},
   {id:uid(),type:'depart',label:'ឡានចេញទៅវិញម៉ោង:',value:'',                          size:24,color:'#b91c1c'},
   {id:uid(),type:'date', label:'',                 value:today(), auto:true,            size:22,color:'#1c2430'}
@@ -208,12 +222,47 @@ function loadRows(){
   return defaults();
 }
 let rows = loadRows();
-rows.forEach(r=>{ if(r.type==='date' && r.auto) r.value=today(); });
+rows.forEach(r=>{
+  if(r.type==='date' && r.auto) r.value=today();
+  if(r.type==='car' && !Array.isArray(r.presets)) r.presets=defaultPresets();
+});
 function saveRows(){ try{ localStorage.setItem(LS_ROWS, JSON.stringify(rows)); }catch(e){} }
 saveRows();
 
 /* ---------- Render log rows ---------- */
 const openIds = new Set();
+function buildPresets(r, inp){
+  const wrap = h('div',{class:'presets'});
+  const group = 'car-'+r.id;
+  const isSel = p => !!p.text && norm(p.text)===norm(r.value);
+  wrap._sync = () => wrap.querySelectorAll('.prow').forEach((row,i)=>{
+    row.querySelector('.pradio').checked = isSel(r.presets[i]);
+  });
+  r.presets.forEach(p=>{
+    const radio = h('input',{type:'radio',name:group,class:'pradio'});
+    radio.checked = isSel(p);
+    radio.addEventListener('change',()=>{ if(radio.checked){ r.value=p.text; inp.value=p.text; saveRows(); } });
+    const t = h('input',{type:'text',class:'ptext',value:p.text,placeholder:'លេខឡាន...'});
+    t.addEventListener('input',()=>{
+      const was = isSel(p);
+      p.text = t.value;
+      if(was){ r.value=p.text; inp.value=p.text; }
+      saveRows(); wrap._sync();
+    });
+    const del = h('button',{class:'btn danger pdel',title:'លុប',onclick:()=>{
+      r.presets = r.presets.filter(x=>x!==p); saveRows(); render();
+    }},'✕');
+    wrap.append(h('label',{class:'prow'}, radio, r.label?h('span',{class:'plab'},r.label):'', t, del));
+  });
+  const add = h('button',{class:'btn addcar',onclick:()=>{
+    if(r.presets.length>=MAX_CARS) return;
+    r.presets.push({id:uid(),text:''}); saveRows(); render();
+    const ins=document.querySelectorAll('.ptext'); if(ins.length) ins[ins.length-1].focus();
+  }},'＋ បន្ថែមលេខឡាន ('+r.presets.length+'/'+MAX_CARS+')');
+  add.disabled = r.presets.length>=MAX_CARS;
+  wrap.append(add);
+  return wrap;
+}
 function render(){
   const box=$('rows'); box.innerHTML='';
   rows.forEach(r=>{
@@ -224,18 +273,24 @@ function render(){
     const inp = h('input',{class:'val',type:'text',style,
       placeholder:(r.type==='arrive'||r.type==='depart')?'--:--:--':'',
       value:r.value,
-      oninput:e=>{ r.value=e.target.value; if(r.type==='date') r.auto=false; saveRows(); }});
+      oninput:e=>{ r.value=e.target.value; if(r.type==='date') r.auto=false; saveRows(); if(card._sync) card._sync(); }});
     if(lab) main.append(lab);
     main.append(inp);
     if(r.type==='arrive'||r.type==='depart'){
       main.append(h('button',{class:'scanbox',title:'ប៉ះដើម្បី Scan QR',onclick:()=>openScanner(r.type)},
         h('span',{},'📷'),'Scan'));
     }
+    if(r.type==='arrive'||r.type==='depart'){
+      main.append(h('button',{class:'nowbtn',title:'ដាក់ម៉ោងឥឡូវ (មិនប្រើ QR)',onclick:()=>applyScan(r.type,null)},'⏱'));
+    }
     main.append(h('button',{class:'gear',title:'កែប្រែ',onclick:()=>{
       card.classList.toggle('open');
       card.classList.contains('open')?openIds.add(r.id):openIds.delete(r.id);
     }},'⚙️'));
     card.append(main);
+    if(r.type==='car' && Array.isArray(r.presets)){
+      const pw = buildPresets(r, inp); card._sync = pw._sync; card.append(pw);
+    }
 
     const tools = h('div',{class:'tools'});
     tools.append(h('div',{class:'t'}, h('b',{},'ចំណងជើង'),
@@ -264,7 +319,6 @@ function render(){
 render();
 
 /* ---------- Apply scan result ---------- */
-const norm = s => (s||'').replace(/\s+/g,'').toUpperCase();
 function applyScan(kind, payload){
   const t=nowTime(), d=today();
   const car=rows.find(r=>r.type==='car'), arr=rows.find(r=>r.type==='arrive'),
@@ -303,10 +357,11 @@ function openScanner(kind){
 }
 function closeScanner(){ session++; stopCamera(); $('scanModal').hidden=true; }
 function explain(e){
-  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia) return 'Camera ត្រូវការបើកតាម https:// ឬក្នុង Chrome';
-  if(e&&e.name==='NotAllowedError') return 'សូមអនុញ្ញាតឱ្យប្រើ Camera';
-  if(e&&e.name==='NotFoundError') return 'រកមិនឃើញ Camera';
-  return 'មិនអាចបើក Camera ('+((e&&e.name)||'error')+')';
+  if(!window.isSecureContext||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)
+    return 'ទំព័រនេះមិនអាចបើក Camera ផ្ទាល់បានទេ (ត្រូវបើកតាម https ក្នុង Chrome/Safari)។ សូមចុច «ថតរូប QR ជំនួស» ខាងក្រោម។';
+  if(e&&e.name==='NotAllowedError') return 'Camera ត្រូវបានបដិសេធ។ សូមអនុញ្ញាតក្នុង Settings របស់ browser រួចចុចបើក Camera ម្តងទៀត ឬប្រើ «ថតរូប QR ជំនួស»។';
+  if(e&&e.name==='NotFoundError') return 'រកមិនឃើញ Camera។ សូមប្រើ «ថតរូប QR ជំនួស»។';
+  return 'មិនអាចបើក Camera ('+((e&&e.name)||'error')+')។ សូមប្រើ «ថតរូប QR ជំនួស»។';
 }
 async function startCamera(){
   const my=++session; stopCamera();
@@ -356,7 +411,39 @@ function onDecoded(text){
 }
 $('scanClose').onclick=closeScanner;
 $('camBtn').onclick=startCamera;
-$('nowBtn').onclick=()=>{ const k=scanKind; closeScanner(); applyScan(k,null); };
+/* Fallback: take a photo with the phone's own camera app, then decode it */
+function loadImg(file){
+  return new Promise((res,rej)=>{
+    const u=URL.createObjectURL(file), im=new Image();
+    im.onload=()=>{ res(im); setTimeout(()=>URL.revokeObjectURL(u),10000); };
+    im.onerror=()=>rej(new Error('img'));
+    im.src=u;
+  });
+}
+async function decodeImage(im){
+  const s=Math.min(1,1600/Math.max(im.naturalWidth,im.naturalHeight));
+  const w=Math.round(im.naturalWidth*s), hh=Math.round(im.naturalHeight*s);
+  cvs.width=w; cvs.height=hh; cctx.drawImage(im,0,0,w,hh);
+  if(HAS_DETECTOR){
+    try{ const d=new BarcodeDetector({formats:['qr_code']}); const c=await d.detect(cvs); if(c.length) return c[0].rawValue; }catch(e){}
+  }
+  await ensureJsQR();
+  const res=jsQR(cctx.getImageData(0,0,w,hh).data,w,hh,{inversionAttempts:'attemptBoth'});
+  return res?res.data:null;
+}
+$('photoBtn').onclick=()=>$('photoIn').click();
+$('photoIn').addEventListener('change',async e=>{
+  const f=e.target.files&&e.target.files[0]; e.target.value='';
+  if(!f) return;
+  stopCamera(); setStatus('កំពុងអានរូប QR...');
+  try{
+    const text=await decodeImage(await loadImg(f));
+    if(text) onDecoded(text);
+    else setStatus('⚠️ រកមិនឃើញ QR ក្នុងរូប — សូមថតឱ្យជិត ច្បាស់ ហើយឱ្យ QR ពេញស៊ុម រួចសាកម្តងទៀត');
+  }catch(err){
+    setStatus('⚠️ អានរូបមិនបាន — ពិនិត្យអ៊ីនធឺណិតម្តង (ដើម្បីទាញ QR reader) ឬសាកម្តងទៀត');
+  }
+});
 $('scanModal').addEventListener('click',e=>{ if(e.target.id==='scanModal') closeScanner(); });
 
 /* ---------- Log actions ---------- */
