@@ -377,7 +377,7 @@ async function shareAlbum(){
   const ready=batch.every(p=>{ const e=stamped.get(p.id); return e&&e.key===keyOf(p.group); });
   if(!ready){ toast('កំពុងរៀបចំរូប...'); await prepareStamped(); toast('រួចរាល់ — ចុចម្តងទៀត'); return; }
   const files=batch.map((p,i)=>new File([stamped.get(p.id).blob],'car-'+(shareOffset+i+1)+'.jpg',{type:'image/jpeg'}));
-  const data={files}; if(shareOffset===0) data.text=shareText();
+  const data={files};   /* files only: adding text makes Telegram split the album */
   try{
     if(navigator.canShare && navigator.canShare({files})) await navigator.share(data);
     else{ files.forEach((f,i)=>setTimeout(()=>downloadFile(f),i*400)); toast('បានទាញយករូប — ផ្ញើក្នុង Telegram ដោយខ្លួនឯង'); }
