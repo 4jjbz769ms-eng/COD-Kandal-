@@ -9,7 +9,7 @@
 :root{--bg:#f3f5f9;--card:#fff;--ink:#1c2430;--mut:#6b7686;--line:#e2e7ef;--acc:#2563eb;--tg:#229ED9;--danger:#dc2626;--ok:#15803d}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0}
-body{background:var(--bg);color:var(--ink);font-family:'Noto Sans Khmer','Khmer OS Battambang','Khmer UI',system-ui,sans-serif;line-height:1.5;padding:max(12px,env(safe-area-inset-top)) 12px calc(24px + env(safe-area-inset-bottom))}
+body{background:var(--bg);color:var(--ink);font-family:'Noto Sans Khmer','Khmer Sangam MN','Khmer OS Battambang','Khmer UI',system-ui,sans-serif;line-height:1.5;padding:max(12px,env(safe-area-inset-top)) 12px calc(24px + env(safe-area-inset-bottom))}
 .app{max-width:520px;margin:0 auto}
 header{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin:4px 2px 10px}
 header h1{font-size:19px;margin:0}
@@ -51,7 +51,7 @@ section[hidden]{display:none}
 .btn.tg{background:var(--tg);border-color:var(--tg);color:#fff;font-size:16px;padding:13px}
 .actions{display:grid;gap:8px;margin-top:14px}
 .actions .two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.actions .three{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.actions .three{display:grid;grid-template-columns:1fr;gap:8px}
 .actions .btn{width:100%}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
 .card h2{font-size:15px;margin:0 0 10px}
@@ -76,6 +76,18 @@ section[hidden]{display:none}
 .sheetBtns{display:grid;gap:8px}
 #toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);background:#1c2430;color:#fff;padding:10px 16px;border-radius:999px;font-size:14px;opacity:0;pointer-events:none;transition:.25s;z-index:99;max-width:90vw;text-align:center}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.photos{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+.phead{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.ptitle{font-weight:600;font-size:15px}
+.capin{flex:1;min-width:0;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:15px;color:var(--ink)}
+.thumbs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.thumb{position:relative;border:3px solid;border-radius:10px;overflow:hidden;aspect-ratio:3/4;background:#000}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block;cursor:zoom-in}
+.capov{position:absolute;left:0;right:0;bottom:0;color:#fff;font-size:10px;font-weight:600;text-align:center;padding:3px 2px;line-height:1.25}
+.tdel{position:absolute;top:3px;right:3px;width:26px;height:26px;border-radius:50%;border:0;background:rgba(0,0,0,.65);color:#fff;font-size:13px;cursor:pointer}
+#lightbox{z-index:60;align-items:center;padding:12px}
+#lightbox .sheet{border-radius:18px;max-height:92vh;overflow:auto}
+#lbImg{width:100%;max-height:70vh;object-fit:contain;border-radius:10px;background:#111;display:block}
 </style>
 </head>
 <body>
@@ -94,14 +106,13 @@ section[hidden]{display:none}
   <section id="secLog">
     <div id="rows"></div>
     <div class="actions">
-      <button class="btn tg" id="btnTg">✈️ ចែករំលែកចូល Telegram</button>
+      <button class="btn tg" id="btnTg">✈️ ចែករំលែកអក្សរចូល Telegram</button>
+      <button class="btn tg" id="btnAlbum">🖼 ចែករំលែករូប Album</button>
       <div class="two">
         <button class="btn" id="btnCopy">📋 ចម្លងអក្សរ</button>
         <button class="btn primary" id="btnSave">💾 រក្សាទុក</button>
       </div>
       <div class="three">
-        <button class="btn" id="btnAdd">＋ ជួរថ្មី</button>
-        <button class="btn" id="btnNext">🧹 ឡានថ្មី</button>
         <button class="btn danger" id="btnReset">↺ ស្តារដើម</button>
       </div>
     </div>
@@ -134,10 +145,18 @@ section[hidden]{display:none}
     <div class="vidwrap"><video id="vid" playsinline muted></video><div class="frame"></div></div>
     <div class="status" id="scanStatus"></div>
     <div class="sheetBtns">
-      <button class="btn primary" id="camBtn">📷 បើក Camera Scan</button>
+      <button class="btn primary" id="shootBtn">📸 ថតរូប <span id="shotCount"></span></button>
+      <button class="btn" id="camBtn">📷 បើក Camera Scan</button>
       <button class="btn" id="photoBtn">🖼 ថតរូប QR ជំនួស (បើ Camera ខាងលើមិនបើក)</button>
       <input type="file" id="photoIn" accept="image/*" capture="environment" hidden>
+      <input type="file" id="shootIn" accept="image/*" capture="environment" hidden>
     </div>
+  </div>
+</div>
+<div class="modal" id="lightbox" hidden>
+  <div class="sheet">
+    <div class="sheetHead"><b>រូបថត</b><button class="btn" id="lbClose">✕ បិទ</button></div>
+    <img id="lbImg" alt="">
   </div>
 </div>
 <div id="toast"></div>
@@ -230,6 +249,155 @@ function saveRows(){ try{ localStorage.setItem(LS_ROWS, JSON.stringify(rows)); }
 saveRows();
 
 /* ---------- Render log rows ---------- */
+/* ---------- Photos (stored in IndexedDB) ---------- */
+const GROUPS = {
+  arrive:{max:3,color:'#15803d',title:'រូបឡានមកដល់',def:'សៀលចូលមកដល់ VET ត្មាតពង (KS)'},
+  depart:{max:3,color:'#b91c1c',title:'រូបឡានចេញទៅវិញ',def:'សៀលចេញពី VET ត្មាតពង (KS)'},
+  extra :{max:5,color:'#2563eb',title:'រូបបន្ថែម',def:''}
+};
+const LS_CAPS='carlog.caps.v1';
+const defCaps=()=>({arrive:GROUPS.arrive.def,depart:GROUPS.depart.def,extra:GROUPS.extra.def});
+let caps=Object.assign(defCaps(),(()=>{try{return JSON.parse(localStorage.getItem(LS_CAPS))||{};}catch(e){return {};}})());
+const saveCaps=()=>{ try{ localStorage.setItem(LS_CAPS,JSON.stringify(caps)); }catch(e){} };
+const capOf=g=>caps[g]||'';
+const keyOf=g=>capOf(g)+'|'+GROUPS[g].color;
+let photos=[], db=null, shareOffset=0, prepT=null, lbUrl=null;
+const stamped=new Map();
+
+function idbOpen(){
+  return new Promise(res=>{
+    try{
+      const rq=indexedDB.open('carlog',1);
+      rq.onupgradeneeded=()=>rq.result.createObjectStore('photos',{keyPath:'id'});
+      rq.onsuccess=()=>res(rq.result); rq.onerror=()=>res(null);
+    }catch(e){ res(null); }
+  });
+}
+function dbAll(){
+  return new Promise(res=>{
+    if(!db) return res([]);
+    try{ const rq=db.transaction('photos').objectStore('photos').getAll(); rq.onsuccess=()=>res(rq.result||[]); rq.onerror=()=>res([]); }
+    catch(e){ res([]); }
+  });
+}
+function dbPut(p){ if(!db) return; try{ db.transaction('photos','readwrite').objectStore('photos').put({id:p.id,group:p.group,blob:p.blob,ts:p.ts}); }catch(e){} }
+function dbDel(id){ if(!db) return; try{ db.transaction('photos','readwrite').objectStore('photos').delete(id); }catch(e){} }
+
+/* draw the coloured frame + caption band onto a photo */
+async function stampBlob(blob, caption, color){
+  const im=await loadImg(blob);
+  try{ await Promise.race([document.fonts.load('700 40px "Noto Sans Khmer"'),new Promise(r=>setTimeout(r,1500))]); }catch(e){}
+  const W=im.naturalWidth, H=im.naturalHeight, b=Math.round(W*0.025), cap=(caption||'').trim();
+  const fam='"Noto Sans Khmer","Khmer Sangam MN","Khmer UI",system-ui,sans-serif';
+  const c=document.createElement('canvas'), x=c.getContext('2d');
+  let fs=Math.round(W*0.05);
+  if(cap){ x.font='700 '+fs+'px '+fam; while(x.measureText(cap).width>W && fs>Math.round(W*0.03)){ fs-=2; x.font='700 '+fs+'px '+fam; } }
+  const band=cap?Math.round(fs*1.9):b;
+  c.width=W+2*b; c.height=H+b+band;
+  x.fillStyle=color; x.fillRect(0,0,c.width,c.height);
+  x.drawImage(im,b,b,W,H);
+  if(cap){
+    x.font='700 '+fs+'px '+fam; x.fillStyle='#fff'; x.textAlign='center'; x.textBaseline='middle';
+    x.fillText(cap,c.width/2,b+H+band/2,W);
+  }
+  return new Promise(res=>c.toBlob(res,'image/jpeg',0.9));
+}
+function schedulePrepare(){ clearTimeout(prepT); prepT=setTimeout(prepareStamped,500); updateAlbumBtn(); }
+async function prepareStamped(){
+  for(const p of photos){
+    const e=stamped.get(p.id);
+    if(e && e.key===keyOf(p.group)) continue;
+    try{ const b=await stampBlob(p.blob,capOf(p.group),GROUPS[p.group].color); stamped.set(p.id,{key:keyOf(p.group),blob:b}); }catch(err){}
+  }
+}
+async function addPhoto(g,blob){
+  const p={id:uid(),group:g,blob,ts:Date.now(),url:URL.createObjectURL(blob)};
+  photos.push(p); dbPut(p); shareOffset=0; render(); updateShotUI(); schedulePrepare();
+  try{ navigator.vibrate&&navigator.vibrate(40); }catch(e){}
+  toast('📸 '+photos.filter(x=>x.group===g).length+'/'+GROUPS[g].max);
+}
+function delPhoto(id){
+  const p=photos.find(x=>x.id===id); if(!p) return;
+  URL.revokeObjectURL(p.url); photos=photos.filter(x=>x!==p); stamped.delete(id); dbDel(id);
+  shareOffset=0; render(); updateShotUI(); updateAlbumBtn();
+}
+async function openLightbox(p){
+  const b=await stampBlob(p.blob,capOf(p.group),GROUPS[p.group].color);
+  if(lbUrl) URL.revokeObjectURL(lbUrl);
+  lbUrl=URL.createObjectURL(b); $('lbImg').src=lbUrl; $('lightbox').hidden=false;
+}
+$('lbClose').onclick=()=>{ $('lightbox').hidden=true; };
+$('lightbox').addEventListener('click',e=>{ if(e.target.id==='lightbox') $('lightbox').hidden=true; });
+
+function photoPanel(g){
+  const cfg=GROUPS[g], list=photos.filter(p=>p.group===g);
+  const wrap=h('div',{class:'photos'});
+  const shoot=h('button',{class:'btn',onclick:()=>openScanner(g,'photo')},'📸 ថតរូប');
+  shoot.disabled=list.length>=cfg.max;
+  wrap.append(h('div',{class:'phead'},h('span',{class:'ptitle'},'📸 '+cfg.title+' '+list.length+'/'+cfg.max),shoot));
+  const cap=h('input',{type:'text',class:'capin',value:capOf(g),placeholder:'អក្សរលើ frame (លុបចោលបាន)'});
+  cap.addEventListener('input',()=>{
+    caps[g]=cap.value; saveCaps();
+    wrap.querySelectorAll('.capov').forEach(o=>{ o.textContent=caps[g]; o.hidden=!caps[g]; });
+    schedulePrepare();
+  });
+  const rst=h('button',{class:'btn pdel',title:'ស្តារអក្សរដើម',onclick:()=>{ caps[g]=cfg.def; saveCaps(); render(); schedulePrepare(); }},'↺');
+  wrap.append(h('div',{class:'prow'},cap,rst));
+  if(list.length){
+    const th=h('div',{class:'thumbs'});
+    list.forEach(p=>{
+      const ov=h('div',{class:'capov',style:'background:'+cfg.color},capOf(g)); ov.hidden=!capOf(g);
+      th.append(h('div',{class:'thumb',style:'border-color:'+cfg.color},
+        h('img',{src:p.url,alt:'',onclick:()=>openLightbox(p)}), ov,
+        h('button',{class:'tdel',title:'លុបរូប',onclick:()=>delPhoto(p.id)},'✕')));
+    });
+    wrap.append(th);
+  }
+  return wrap;
+}
+function extraCard(){ const card=h('div',{class:'row'}); card.append(photoPanel('extra')); card.firstChild.style.cssText='margin:0;padding:0;border:0'; return card; }
+
+/* ---------- Share all photos as one Telegram album ---------- */
+function updateAlbumBtn(){
+  const b=$('btnAlbum'); if(!b) return;
+  const total=photos.length;
+  b.textContent = (shareOffset>0&&shareOffset<total) ? '🖼 ចែករំលែករូបបន្ទាប់ ('+(total-shareOffset)+' សន្លឹក)'
+                                                       : '🖼 ចែករំលែករូប Album'+(total?' ('+total+')':'');
+  b.disabled = total===0;
+}
+function downloadFile(f){
+  const a=document.createElement('a'); a.href=URL.createObjectURL(f); a.download=f.name;
+  document.body.append(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+}
+async function shareAlbum(){
+  const list=['arrive','depart','extra'].flatMap(g=>photos.filter(p=>p.group===g));
+  if(!list.length) return toast('មិនទាន់មានរូប');
+  if(shareOffset>=list.length) shareOffset=0;
+  const batch=list.slice(shareOffset,shareOffset+10);          /* Telegram album limit = 10 */
+  const ready=batch.every(p=>{ const e=stamped.get(p.id); return e&&e.key===keyOf(p.group); });
+  if(!ready){ toast('កំពុងរៀបចំរូប...'); await prepareStamped(); toast('រួចរាល់ — ចុចម្តងទៀត'); return; }
+  const files=batch.map((p,i)=>new File([stamped.get(p.id).blob],'car-'+(shareOffset+i+1)+'.jpg',{type:'image/jpeg'}));
+  const data={files}; if(shareOffset===0) data.text=shareText();
+  try{
+    if(navigator.canShare && navigator.canShare({files})) await navigator.share(data);
+    else{ files.forEach((f,i)=>setTimeout(()=>downloadFile(f),i*400)); toast('បានទាញយករូប — ផ្ញើក្នុង Telegram ដោយខ្លួនឯង'); }
+  }catch(err){
+    if(err&&err.name==='AbortError') return;
+    toast('ចែករំលែកមិនបាន'); return;
+  }
+  shareOffset+=batch.length;
+  if(shareOffset>=list.length) shareOffset=0; else toast('នៅសល់ '+(list.length-shareOffset)+' សន្លឹក — ចុចម្តងទៀត');
+  updateAlbumBtn();
+}
+$('btnAlbum').onclick=shareAlbum;
+
+(async()=>{
+  db=await idbOpen();
+  const all=await dbAll(); all.sort((a,b)=>a.ts-b.ts);
+  photos=all.map(p=>({id:p.id,group:p.group,blob:p.blob,ts:p.ts,url:URL.createObjectURL(p.blob)}));
+  render(); schedulePrepare();
+})();
+
 const openIds = new Set();
 function buildPresets(r, inp){
   const wrap = h('div',{class:'presets'});
@@ -257,7 +425,7 @@ function buildPresets(r, inp){
   const add = h('button',{class:'btn addcar',onclick:()=>{
     if(r.presets.length>=MAX_CARS) return;
     r.presets.push({id:uid(),text:''}); saveRows(); render();
-    const ins=document.querySelectorAll('.ptext'); if(ins.length) ins[ins.length-1].focus();
+    const ins=document.querySelectorAll('.presets .ptext'); if(ins.length) ins[ins.length-1].focus();
   }},'＋ បន្ថែមលេខឡាន ('+r.presets.length+'/'+MAX_CARS+')');
   add.disabled = r.presets.length>=MAX_CARS;
   wrap.append(add);
@@ -291,6 +459,7 @@ function render(){
     if(r.type==='car' && Array.isArray(r.presets)){
       const pw = buildPresets(r, inp); card._sync = pw._sync; card.append(pw);
     }
+    if(r.type==='arrive'||r.type==='depart') card.append(photoPanel(r.type));
 
     const tools = h('div',{class:'tools'});
     tools.append(h('div',{class:'t'}, h('b',{},'ចំណងជើង'),
@@ -315,6 +484,8 @@ function render(){
     card.append(tools);
     box.append(card);
   });
+  box.append(extraCard());
+  updateAlbumBtn();
 }
 render();
 
@@ -341,7 +512,7 @@ function applyScan(kind, payload){
 }
 
 /* ---------- Scanner ---------- */
-let stream=null, scanTimer=null, scanKind=null, scanning=false, session=0, detector=null;
+let stream=null, scanTimer=null, scanKind=null, scanMode='scan', scanning=false, session=0, detector=null;
 const vid=$('vid'), cvs=document.createElement('canvas'), cctx=cvs.getContext('2d',{willReadFrequently:true});
 const setStatus = m => $('scanStatus').textContent=m;
 function stopCamera(){
@@ -349,19 +520,29 @@ function stopCamera(){
   if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
   vid.srcObject=null;
 }
-function openScanner(kind){
-  scanKind=kind;
-  $('scanTitle').textContent = kind==='arrive' ? 'Scan QR · ឡានមកដល់' : 'Scan QR · ឡានចេញទៅវិញ';
+function openScanner(kind, mode){
+  scanKind=kind; scanMode=(kind==='extra')?'photo':(mode||'scan');
+  const nm={arrive:'ឡានមកដល់',depart:'ឡានចេញទៅវិញ',extra:'រូបបន្ថែម'}[kind];
+  $('scanTitle').textContent = (scanMode==='photo'?'📸 ថតរូប · ':'Scan QR · ')+nm;
+  $('photoBtn').hidden = scanMode==='photo';
   $('scanModal').hidden=false;
+  updateShotUI();
   startCamera();
+}
+function updateShotUI(){
+  const g=scanKind; if(!g) return;
+  const n=photos.filter(p=>p.group===g).length, m=GROUPS[g].max;
+  $('shotCount').textContent='('+n+'/'+m+')';
+  $('shootBtn').disabled=n>=m;
 }
 function closeScanner(){ session++; stopCamera(); $('scanModal').hidden=true; }
 function explain(e){
+  const alt = scanMode==='photo' ? 'ប៊ុត្តុង «ថតរូប»' : '«ថតរូប QR ជំនួស»';
   if(!window.isSecureContext||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)
-    return 'ទំព័រនេះមិនអាចបើក Camera ផ្ទាល់បានទេ (ត្រូវបើកតាម https ក្នុង Chrome/Safari)។ សូមចុច «ថតរូប QR ជំនួស» ខាងក្រោម។';
-  if(e&&e.name==='NotAllowedError') return 'Camera ត្រូវបានបដិសេធ។ សូមអនុញ្ញាតក្នុង Settings របស់ browser រួចចុចបើក Camera ម្តងទៀត ឬប្រើ «ថតរូប QR ជំនួស»។';
-  if(e&&e.name==='NotFoundError') return 'រកមិនឃើញ Camera។ សូមប្រើ «ថតរូប QR ជំនួស»។';
-  return 'មិនអាចបើក Camera ('+((e&&e.name)||'error')+')។ សូមប្រើ «ថតរូប QR ជំនួស»។';
+    return 'ទំព័រនេះមិនអាចបើក Camera ផ្ទាល់បានទេ (ត្រូវបើកតាម https ក្នុង Chrome/Safari)។ សូមប្រើ '+alt+' ខាងក្រោម។';
+  if(e&&e.name==='NotAllowedError') return 'Camera ត្រូវបានបដិសេធ។ សូមអនុញ្ញាតក្នុង Settings របស់ browser រួចចុចបើក Camera ម្តងទៀត ឬប្រើ '+alt+'។';
+  if(e&&e.name==='NotFoundError') return 'រកមិនឃើញ Camera។ សូមប្រើ '+alt+'។';
+  return 'មិនអាចបើក Camera ('+((e&&e.name)||'error')+')។ សូមប្រើ '+alt+'។';
 }
 async function startCamera(){
   const my=++session; stopCamera();
@@ -373,6 +554,7 @@ async function startCamera(){
   if(my!==session){ stream.getTracks().forEach(t=>t.stop()); stream=null; return; }
   vid.srcObject=stream;
   try{ await vid.play(); }catch(e){}
+  if(scanMode==='photo'){ setStatus('ប៉ះ «ថតរូប» ដើម្បីថត'); return; }
   detector=null;
   if(HAS_DETECTOR){ try{ detector=new BarcodeDetector({formats:['qr_code']}); }catch(e){ detector=null; } }
   if(!detector){
@@ -411,6 +593,27 @@ function onDecoded(text){
 }
 $('scanClose').onclick=closeScanner;
 $('camBtn').onclick=startCamera;
+function downscaleToBlob(src,w0,h0){
+  return new Promise(res=>{
+    const sc=Math.min(1,1280/Math.max(w0,h0)), w=Math.round(w0*sc), hh=Math.round(h0*sc);
+    const c=document.createElement('canvas'); c.width=w; c.height=hh; c.getContext('2d').drawImage(src,0,0,w,hh);
+    c.toBlob(res,'image/jpeg',0.85);
+  });
+}
+$('shootBtn').onclick=async()=>{
+  const g=scanKind; if(!g) return;
+  if(photos.filter(p=>p.group===g).length>=GROUPS[g].max) return toast('រូបពេញហើយ');
+  if(stream && vid.readyState>=2 && vid.videoWidth){
+    const b=await downscaleToBlob(vid,vid.videoWidth,vid.videoHeight);
+    if(b) addPhoto(g,b);
+  }else $('shootIn').click();
+};
+$('shootIn').addEventListener('change',async e=>{
+  const f=e.target.files&&e.target.files[0]; e.target.value='';
+  const g=scanKind; if(!f||!g) return;
+  try{ const im=await loadImg(f); const b=await downscaleToBlob(im,im.naturalWidth,im.naturalHeight); if(b) addPhoto(g,b); }
+  catch(err){ toast('ថតរូបមិនបាន'); }
+});
 /* Fallback: take a photo with the phone's own camera app, then decode it */
 function loadImg(file){
   return new Promise((res,rej)=>{
@@ -460,16 +663,6 @@ $('btnCopy').onclick=async()=>{
   catch(e){ const ta=h('textarea',{},t); document.body.append(ta); ta.select(); try{document.execCommand('copy');toast('បានចម្លង');}catch(_){toast('ចម្លងមិនបាន');} ta.remove(); }
 };
 $('btnSave').onclick=()=>{ saveRows(); toast('💾 បានរក្សាទុក'); };
-$('btnAdd').onclick=()=>{
-  const r={id:uid(),type:'text',label:'',value:'',size:22,color:'#1c2430'};
-  rows.push(r); openIds.add(r.id); saveRows(); render();
-  const ins=document.querySelectorAll('#rows .val'); ins[ins.length-1].focus();
-};
-$('btnNext').onclick=()=>{
-  if(!confirm('សម្អាតម៉ោងមកដល់/ចេញ សម្រាប់ឡានថ្មី?')) return;
-  rows.forEach(r=>{ if(r.type==='arrive'||r.type==='depart') r.value=''; if(r.type==='date'){ r.value=today(); r.auto=true; } });
-  saveRows(); render(); toast('រួចរាល់');
-};
 $('btnReset').onclick=()=>{
   if(!confirm('ស្តារទៅលំនាំដើម? ការកែប្រែទាំងអស់នឹងបាត់')) return;
   rows=defaults(); openIds.clear(); saveRows(); render();
