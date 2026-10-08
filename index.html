@@ -108,6 +108,7 @@ section[hidden]{display:none}
     <div class="actions">
       <button class="btn tg" id="btnTg">✈️ ចែករំលែកអក្សរចូល Telegram</button>
       <button class="btn tg" id="btnAlbum">🖼 ចែករំលែករូប Album</button>
+      <button class="btn primary" id="btnSavePng">💾 Save PNG ទាំង ២ ក្រឡា (មកដល់ + ចេញ)</button>
       <div class="two">
         <button class="btn" id="btnCopy">📋 ចម្លងអក្សរ</button>
         <button class="btn primary" id="btnSave">💾 រក្សាទុក</button>
@@ -286,7 +287,7 @@ function dbClear(){ if(!db) return; try{ db.transaction('photos','readwrite').ob
 function dbDel(id){ if(!db) return; try{ db.transaction('photos','readwrite').objectStore('photos').delete(id); }catch(e){} }
 
 /* draw the coloured frame + caption band onto a photo */
-async function stampBlob(blob, caption, color){
+async function stampBlob(blob, caption, color, mime){
   const im=await loadImg(blob);
   try{ await Promise.race([document.fonts.load('700 40px "Noto Sans Khmer"'),new Promise(r=>setTimeout(r,1500))]); }catch(e){}
   const W=im.naturalWidth, H=im.naturalHeight, b=Math.round(W*0.025), cap=(caption||'').trim();
@@ -302,7 +303,32 @@ async function stampBlob(blob, caption, color){
     x.font='700 '+fs+'px '+fam; x.fillStyle='#fff'; x.textAlign='center'; x.textBaseline='middle';
     x.fillText(cap,c.width/2,b+H+band/2,W);
   }
-  return new Promise(res=>c.toBlob(res,'image/jpeg',0.9));
+  return new Promise(res=>mime==='image/png' ? c.toBlob(res,'image/png') : c.toBlob(res,'image/jpeg',0.9));
+}
+
+/* ---------- Save framed photos as PNG (per box, or both boxes at once) ---------- */
+const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+async function savePNGs(groups){
+  const list=groups.flatMap(g=>photos.filter(p=>p.group===g));
+  if(!list.length) return toast('មិនទាន់មានរូប');
+  toast('កំពុងរៀបចំ PNG...');
+  const car=(rows.find(r=>r.type==='car')||{}).value||'', stampDate=today().replace(/\//g,'-');
+  const cnt={}, files=[];
+  try{
+    for(const p of list){
+      const b=await stampBlob(p.blob,capOf(p.group),GROUPS[p.group].color,'image/png');
+      cnt[p.group]=(cnt[p.group]||0)+1;
+      const nm=['VET',car?safeName(car):'',stampDate,p.group,cnt[p.group]].filter(Boolean).join('_')+'.png';
+      files.push(new File([b],nm,{type:'image/png'}));
+    }
+  }catch(e){ return toast('បង្កើត PNG មិនបាន'); }
+  /* iPhone: share sheet has "Save Image" (to Photos). Others: direct download. */
+  if(IS_IOS && navigator.canShare && navigator.canShare({files})){
+    try{ await navigator.share({files}); return; }
+    catch(err){ if(err&&err.name==='AbortError') return; }
+  }
+  files.forEach((f,i)=>setTimeout(()=>downloadFile(f),i*500));
+  toast('⬇️ បានរក្សាទុក PNG '+files.length+' សន្លឹក');
 }
 function schedulePrepare(){ clearTimeout(prepT); prepT=setTimeout(prepareStamped,500); updateAlbumBtn(); }
 async function prepareStamped(){
@@ -363,6 +389,7 @@ function photoPanel(g){
         h('button',{class:'tdel',title:'លុបរូប',onclick:()=>delPhoto(p.id)},'✕')));
     });
     wrap.append(th);
+    wrap.append(h('button',{class:'btn primary',onclick:()=>savePNGs([g])},'💾 Save PNG ('+list.length+') ជាមួយ frame'));
   }
   return wrap;
 }
@@ -376,7 +403,14 @@ function updateAlbumBtn(){
                                                        : '🖼 ចែករំលែករូប Album'+(total?' ('+total+')':'');
   b.disabled = total===0;
   const d=$('btnClearPhotos'); if(d) d.disabled = total===0;
+  const s=$('btnSavePng');
+  if(s){
+    const n=photos.filter(p=>p.group==='arrive'||p.group==='depart').length;
+    s.disabled = n===0;
+    s.textContent = '💾 Save PNG ទាំង ២ ក្រឡា (មកដល់ + ចេញ)'+(n?' ('+n+')':'');
+  }
 }
+$('btnSavePng').onclick=()=>savePNGs(['arrive','depart']);
 function downloadFile(f){
   const a=document.createElement('a'); a.href=URL.createObjectURL(f); a.download=f.name;
   document.body.append(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),4000);
