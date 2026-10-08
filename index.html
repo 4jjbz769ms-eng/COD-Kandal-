@@ -51,7 +51,7 @@ section[hidden]{display:none}
 .btn.tg{background:var(--tg);border-color:var(--tg);color:#fff;font-size:16px;padding:13px}
 .actions{display:grid;gap:8px;margin-top:14px}
 .actions .two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.actions .three{display:grid;grid-template-columns:1fr;gap:8px}
+.actions .three{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .actions .btn{width:100%}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
 .card h2{font-size:15px;margin:0 0 10px}
@@ -113,6 +113,7 @@ section[hidden]{display:none}
         <button class="btn primary" id="btnSave">💾 រក្សាទុក</button>
       </div>
       <div class="three">
+        <button class="btn danger" id="btnClearPhotos">🗑 លុបរូបទាំងអស់</button>
         <button class="btn danger" id="btnReset">↺ ស្តារដើម</button>
       </div>
     </div>
@@ -281,6 +282,7 @@ function dbAll(){
   });
 }
 function dbPut(p){ if(!db) return; try{ db.transaction('photos','readwrite').objectStore('photos').put({id:p.id,group:p.group,blob:p.blob,ts:p.ts}); }catch(e){} }
+function dbClear(){ if(!db) return; try{ db.transaction('photos','readwrite').objectStore('photos').clear(); }catch(e){} }
 function dbDel(id){ if(!db) return; try{ db.transaction('photos','readwrite').objectStore('photos').delete(id); }catch(e){} }
 
 /* draw the coloured frame + caption band onto a photo */
@@ -321,6 +323,15 @@ function delPhoto(id){
   URL.revokeObjectURL(p.url); photos=photos.filter(x=>x!==p); stamped.delete(id); dbDel(id);
   shareOffset=0; render(); updateShotUI(); updateAlbumBtn();
 }
+function clearAllPhotos(){
+  if(!photos.length) return;
+  if(!confirm('លុបរូបទាំងអស់ ('+photos.length+' សន្លឹក)?')) return;
+  photos.forEach(p=>URL.revokeObjectURL(p.url));
+  photos=[]; stamped.clear(); dbClear(); shareOffset=0;
+  $('lightbox').hidden=true;
+  render(); updateShotUI(); updateAlbumBtn(); toast('🗑 បានលុបរូបទាំងអស់');
+}
+$('btnClearPhotos').onclick=clearAllPhotos;
 async function openLightbox(p){
   const b=await stampBlob(p.blob,capOf(p.group),GROUPS[p.group].color);
   if(lbUrl) URL.revokeObjectURL(lbUrl);
@@ -364,6 +375,7 @@ function updateAlbumBtn(){
   b.textContent = (shareOffset>0&&shareOffset<total) ? '🖼 ចែករំលែករូបបន្ទាប់ ('+(total-shareOffset)+' សន្លឹក)'
                                                        : '🖼 ចែករំលែករូប Album'+(total?' ('+total+')':'');
   b.disabled = total===0;
+  const d=$('btnClearPhotos'); if(d) d.disabled = total===0;
 }
 function downloadFile(f){
   const a=document.createElement('a'); a.href=URL.createObjectURL(f); a.download=f.name;
