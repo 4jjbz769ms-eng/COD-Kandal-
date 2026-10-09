@@ -196,11 +196,11 @@ function ensureJsQR(){
 
 /* ---------- Data ---------- */
 const LS_ROWS='carlog.rows.v1', LS_QR='carlog.qrs.v1';
-const MAX_CARS = 5;
+const MAX_CARS = 10;
 const defaultPresets = () => ['EZ 194','M 15','M 89','G 179','M G45'].map(t=>({id:uid(),text:t}));
 const defaults = () => [
   {id:uid(),type:'text', label:'',                 value:'វីរះប៊ុនថាំ ត្មាតពង (KS)', size:26,color:'#1c2430'},
-  {id:uid(),type:'car',  label:'លេខឡាន',           value:'EZ 192', presets:defaultPresets(), size:24,color:'#1c2430'},
+  {id:uid(),type:'car',  label:'លេខឡាន',           value:'EZ 192', presets:defaultPresets(), picked:null, size:24,color:'#1c2430'},
   {id:uid(),type:'arrive',label:'ឡានមកដល់ម៉ោង:',   value:'',                          size:24,color:'#15803d'},
   {id:uid(),type:'depart',label:'ឡានចេញទៅវិញម៉ោង:',value:'',                          size:24,color:'#b91c1c'},
   {id:uid(),type:'date', label:'',                 value:today(), auto:true,            size:22,color:'#1c2430'}
@@ -216,6 +216,7 @@ let rows = loadRows();
 rows.forEach(r=>{
   if(r.type==='date' && r.auto) r.value=today();
   if(r.type==='car' && !Array.isArray(r.presets)) r.presets=defaultPresets();
+  if(r.type==='car' && r.picked===undefined){ const m=r.presets.find(p=>p.text&&norm(p.text)===norm(r.value)); r.picked=m?m.id:null; }
 });
 function saveRows(){ try{ localStorage.setItem(LS_ROWS, JSON.stringify(rows)); }catch(e){} }
 saveRows();
@@ -392,6 +393,7 @@ function copyTextQuiet(t){
   try{ const ta=document.createElement('textarea'); ta.value=t; ta.style.cssText='position:fixed;opacity:0'; document.body.append(ta); ta.select(); const ok=document.execCommand('copy'); ta.remove(); return ok; }catch(e){ return false; }
 }
 async function shareAlbum(){
+  if(!needCar()) return;
   copyTextQuiet(shareText());   /* text is on the clipboard: paste it into the caption box in Telegram */
   const list=['arrive','depart','extra'].flatMap(g=>photos.filter(p=>p.group===g));
   if(!list.length) return toast('មិនទាន់មានរូប');
@@ -422,28 +424,40 @@ $('btnAlbum').onclick=shareAlbum;
 })();
 
 const openIds = new Set();
-function buildPresets(r, inp){
-  const wrap = h('div',{class:'presets'});
-  const group = 'car-'+r.id;
-  const isSel = p => !!p.text && norm(p.text)===norm(r.value);
-  wrap._sync = () => wrap.querySelectorAll('.prow').forEach((row,i)=>{
-    row.querySelector('.pradio').checked = isSel(r.presets[i]);
+let carEdit=false;
+function fillCarSelect(sel,r){
+  sel.innerHTML='';
+  sel.append(h('option',{value:''},'-- ជ្រើសរើសលេខឡាន --'));
+  r.presets.filter(p=>p.text.trim()).forEach(p=>sel.append(h('option',{value:p.id},p.text)));
+  sel.value = r.presets.some(p=>p.id===r.picked && p.text.trim()) ? r.picked : '';
+}
+function carSelect(r,style,card){
+  const sel=h('select',{class:'val',style});
+  fillCarSelect(sel,r);
+  sel.addEventListener('change',()=>{
+    const p=r.presets.find(x=>x.id===sel.value);
+    r.picked=p?p.id:null; r.value=p?p.text:'';
+    saveRows();
   });
+  return sel;
+}
+function buildPresets(r, sel){
+  const wrap = h('div',{class:'presets'});
+  wrap.append(h('button',{class:'btn addcar',onclick:()=>{ carEdit=!carEdit; render(); }},
+    carEdit ? '✔ បិទបញ្ជីលេខឡាន' : '✏️ កែបញ្ជីលេខឡាន ('+r.presets.length+'/'+MAX_CARS+')'));
+  if(!carEdit) return wrap;
   r.presets.forEach(p=>{
-    const radio = h('input',{type:'radio',name:group,class:'pradio'});
-    radio.checked = isSel(p);
-    radio.addEventListener('change',()=>{ if(radio.checked){ r.value=p.text; inp.value=p.text; saveRows(); } });
     const t = h('input',{type:'text',class:'ptext',value:p.text,placeholder:'លេខឡាន...'});
     t.addEventListener('input',()=>{
-      const was = isSel(p);
       p.text = t.value;
-      if(was){ r.value=p.text; inp.value=p.text; }
-      saveRows(); wrap._sync();
+      if(r.picked===p.id) r.value=p.text;
+      saveRows(); fillCarSelect(sel,r);
     });
     const del = h('button',{class:'btn danger pdel',title:'លុប',onclick:()=>{
+      if(r.picked===p.id){ r.picked=null; r.value=''; }
       r.presets = r.presets.filter(x=>x!==p); saveRows(); render();
     }},'✕');
-    wrap.append(h('label',{class:'prow'}, radio, r.label?h('span',{class:'plab'},r.label):'', t, del));
+    wrap.append(h('div',{class:'prow'}, t, del));
   });
   const add = h('button',{class:'btn addcar',onclick:()=>{
     if(r.presets.length>=MAX_CARS) return;
@@ -461,10 +475,10 @@ function render(){
     const card = h('div',{class:'row'+(openIds.has(r.id)?' open':'')});
     const main = h('div',{class:'main'});
     const lab = r.label ? h('span',{class:'lab',style}, r.label) : null;
-    const inp = h('input',{class:'val',type:'text',style,
+    const inp = r.type==='car' ? carSelect(r,style,card) : h('input',{class:'val',type:'text',style,
       placeholder:(r.type==='arrive'||r.type==='depart')?'--:--:--':'',
       value:r.value,
-      oninput:e=>{ r.value=e.target.value; if(r.type==='date') r.auto=false; saveRows(); if(card._sync) card._sync(); }});
+      oninput:e=>{ r.value=e.target.value; if(r.type==='date') r.auto=false; if(r.type==='car') syncPick(r); saveRows(); if(card._sync) card._sync(); }});
     if(lab) main.append(lab);
     main.append(inp);
     if(r.type==='arrive'||r.type==='depart'){
@@ -478,7 +492,7 @@ function render(){
     }},'⚙️'));
     card.append(main);
     if(r.type==='car' && Array.isArray(r.presets)){
-      const pw = buildPresets(r, inp); card._sync = pw._sync; card.append(pw);
+      const pw = buildPresets(r, inp); card.append(pw);
     }
     if(r.type==='arrive'||r.type==='depart') card.append(photoPanel(r.type));
 
@@ -497,7 +511,7 @@ function render(){
       }})));
     const btns = h('div',{class:'t'});
     if(r.type==='date') btns.append(h('button',{class:'btn',onclick:()=>{ r.value=today(); r.auto=true; saveRows(); render(); }},'↻ ថ្ងៃនេះ (Auto)'));
-    if(r.type==='arrive'||r.type==='depart') btns.append(h('button',{class:'btn',onclick:()=>{ r.value=''; saveRows(); render(); }},'សម្អាតម៉ោង'));
+    if(r.type==='arrive'||r.type==='depart') btns.append(h('button',{class:'btn',onclick:()=>{ r.value=''; r.stamped=false; saveRows(); render(); }},'សម្អាតម៉ោង'));
     btns.append(h('button',{class:'btn danger',onclick:()=>{
       if(confirm('លុបជួរនេះ?')){ rows=rows.filter(x=>x!==r); openIds.delete(r.id); saveRows(); render(); }
     }},'🗑 លុបជួរ'));
@@ -511,19 +525,32 @@ function render(){
 render();
 
 /* ---------- Apply scan result ---------- */
+function syncPick(car){
+  const m=(car.presets||[]).find(p=>p.text&&norm(p.text)===norm(car.value));
+  car.picked=m?m.id:null;
+}
+/* sharing needs the car number to be ticked */
+function needCar(){
+  const car=rows.find(r=>r.type==='car');
+  if(car && !car.picked){ toast('សូមចុចជ្រើសរើសលេខឡាន'); return false; }
+  const arr=rows.find(r=>r.type==='arrive'), dep=rows.find(r=>r.type==='depart');
+  if(arr && !(arr.stamped && arr.value)){ toast('សូមចុចរូបម៉ោង ⏱ ឡានមកដល់ សិន'); return false; }
+  if(dep && !(dep.stamped && dep.value)){ toast('សូមចុចរូបម៉ោង ⏱ ឡានចេញទៅវិញ សិន'); return false; }
+  return true;
+}
 function applyScan(kind, payload){
   const t=nowTime(), d=today();
   const car=rows.find(r=>r.type==='car'), arr=rows.find(r=>r.type==='arrive'),
         dep=rows.find(r=>r.type==='depart'), date=rows.find(r=>r.type==='date');
   let msg;
   if(kind==='arrive'){
-    if(arr) arr.value=t;
-    if(payload && car) car.value=payload;
+    if(arr){ arr.value=t; arr.stamped=true; }
+    if(payload && car){ car.value=payload; syncPick(car); }
     msg='✅ ឡានមកដល់ '+t+(payload?' · '+payload:'');
   }else{
-    if(dep) dep.value=t;
+    if(dep){ dep.value=t; dep.stamped=true; }
     if(payload && car){
-      if(!car.value) car.value=payload;
+      if(!car.value){ car.value=payload; syncPick(car); }
       else if(norm(payload)!==norm(car.value)) msg='⚠️ QR ('+payload+') ខុសពីលេខឡាន ('+car.value+')';
     }
     msg = msg || ('✅ ឡានចេញ '+t);
@@ -675,10 +702,12 @@ function shareText(){
   return rows.map(r=>((r.label?r.label+' ':'')+(r.value||'')).trim()).filter(Boolean).map(l=>'- '+l).join('\n');
 }
 $('btnTg').onclick=()=>{
+  if(!needCar()) return;
   const t=shareText();
   window.open('https://t.me/share/url?url=&text='+encodeURIComponent(t),'_blank');
 };
 $('btnCopy').onclick=async()=>{
+  if(!needCar()) return;
   const t=shareText();
   try{ await navigator.clipboard.writeText(t); toast('បានចម្លង'); }
   catch(e){ const ta=h('textarea',{},t); document.body.append(ta); ta.select(); try{document.execCommand('copy');toast('បានចម្លង');}catch(_){toast('ចម្លងមិនបាន');} ta.remove(); }
@@ -688,7 +717,7 @@ $('btnReset').onclick=()=>{
   if(!confirm('ស្តារទៅលំនាំដើម? (ក្រឡាលេខឡាន និងបញ្ជីលេខឡាន មិនប៉ះពាល់ទេ)')) return;
   const keepCar=rows.find(r=>r.type==='car');      /* car number box stays exactly as the user left it */
   rows=defaults();
-  if(keepCar){ const i=rows.findIndex(r=>r.type==='car'); if(i>=0) rows[i]=keepCar; }
+  if(keepCar){ keepCar.picked=null; const i=rows.findIndex(r=>r.type==='car'); if(i>=0) rows[i]=keepCar; }   /* tick is cleared: must tick again */
   openIds.clear(); saveRows(); render();
 };
 
