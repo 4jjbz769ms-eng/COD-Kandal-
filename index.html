@@ -378,12 +378,12 @@ function updateAlbumBtn(){
   const d=$('btnClearPhotos'); if(d) d.disabled = total===0;
   const s=$('btnSavePng');
   if(s){
-    const n=photos.filter(p=>p.group==='arrive'||p.group==='depart').length;
+    const n=photos.filter(p=>p.group==='arrive'||p.group==='depart'||p.group==='extra').length;
     s.disabled = n===0;
     s.textContent = '💾 Save PNG ទាំង ២ ក្រឡា (មកដល់ + ចេញ)'+(n?' ('+n+')':'');
   }
 }
-$('btnSavePng').onclick=()=>savePNGs(['arrive','depart']);
+$('btnSavePng').onclick=()=>savePNGs(['arrive','depart','extra']);
 function downloadFile(f){
   const a=document.createElement('a'); a.href=URL.createObjectURL(f); a.download=f.name;
   document.body.append(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),4000);
