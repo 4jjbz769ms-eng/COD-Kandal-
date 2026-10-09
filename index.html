@@ -278,6 +278,7 @@ async function stampBlob(blob, caption, color, mime){
 
 /* ---------- Save framed photos as PNG (per box, or both boxes at once) ---------- */
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+const safeName = s => String(s||'').trim().replace(/[\\/:*?"<>|\s]+/g,'_').replace(/^_+|_+$/g,'');
 async function savePNGs(groups){
   const list=groups.flatMap(g=>photos.filter(p=>p.group===g));
   if(!list.length) return toast('មិនទាន់មានរូប');
@@ -287,6 +288,7 @@ async function savePNGs(groups){
   try{
     for(const p of list){
       const b=await stampBlob(p.blob,capOf(p.group),GROUPS[p.group].color,'image/png');
+      if(!b) throw new Error('png-null');
       cnt[p.group]=(cnt[p.group]||0)+1;
       const nm=['VET',car?safeName(car):'',stampDate,p.group,cnt[p.group]].filter(Boolean).join('_')+'.png';
       files.push(new File([b],nm,{type:'image/png'}));
