@@ -82,7 +82,9 @@ section[hidden]{display:none}
 .capin{flex:1;min-width:0;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:15px;color:var(--ink)}
 .thumbs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .thumb{position:relative;border:3px solid;border-radius:10px;overflow:hidden;aspect-ratio:3/4;background:#000}
-.thumb img{width:100%;height:100%;object-fit:cover;display:block;cursor:zoom-in}
+.thumb img{width:100%;height:100%;object-fit:contain;display:block;cursor:zoom-in}
+.fmt{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.fmt .btn{padding:8px 0;font-size:15px;text-align:center}
 .capov{position:absolute;left:0;right:0;bottom:0;color:#fff;font-size:10px;font-weight:600;text-align:center;padding:3px 2px;line-height:1.25}
 .tdel{position:absolute;top:3px;right:3px;width:26px;height:26px;border-radius:50%;border:0;background:rgba(0,0,0,.65);color:#fff;font-size:13px;cursor:pointer}
 #lightbox{z-index:60;align-items:center;padding:12px}
@@ -230,7 +232,12 @@ const defCaps=()=>({arrive:GROUPS.arrive.def,depart:GROUPS.depart.def,extra:GROU
 let caps=Object.assign(defCaps(),(()=>{try{return JSON.parse(localStorage.getItem(LS_CAPS))||{};}catch(e){return {};}})());
 const saveCaps=()=>{ try{ localStorage.setItem(LS_CAPS,JSON.stringify(caps)); }catch(e){} };
 const capOf=g=>caps[g]||'';
-const keyOf=g=>capOf(g)+'|'+GROUPS[g].color;
+const LS_FMT='carlog.capfmt.v1';
+const defFmt=()=>({s:1,dx:0,dy:0});
+let fmt=(()=>{ let o={}; try{ o=JSON.parse(localStorage.getItem(LS_FMT))||{}; }catch(e){} const r={}; for(const g in GROUPS) r[g]=Object.assign(defFmt(),o[g]||{}); return r; })();
+const saveFmt=()=>{ try{ localStorage.setItem(LS_FMT,JSON.stringify(fmt)); }catch(e){} };
+const fmtKey=g=>fmt[g].s+','+fmt[g].dx+','+fmt[g].dy;
+const keyOf=g=>capOf(g)+'|'+GROUPS[g].color+'|'+fmtKey(g);
 let photos=[], db=null, shareOffset=0, prepT=null, lbUrl=null;
 const stamped=new Map();
 
@@ -254,27 +261,30 @@ function dbPut(p){ if(!db) return; try{ db.transaction('photos','readwrite').obj
 function dbClear(){ if(!db) return; try{ db.transaction('photos','readwrite').objectStore('photos').clear(); }catch(e){} }
 function dbDel(id){ if(!db) return; try{ db.transaction('photos','readwrite').objectStore('photos').delete(id); }catch(e){} }
 
-/* draw the coloured frame + caption band onto a photo */
-async function stampBlob(blob, caption, color, mime){
+/* draw the caption text only (no frame) onto a photo; f = {s:size scale, dx, dy in %} */
+async function stampBlob(blob, caption, color, mime, f){
+  f=f||defFmt();
   const im=await loadImg(blob);
   try{ await Promise.race([document.fonts.load('700 40px "Noto Sans Khmer"'),new Promise(r=>setTimeout(r,1500))]); }catch(e){}
-  const W=im.naturalWidth, H=im.naturalHeight, b=Math.round(W*0.025), cap=(caption||'').trim();
+  const W=im.naturalWidth, H=im.naturalHeight, cap=(caption||'').trim();
   const fam='"Noto Sans Khmer","Khmer Sangam MN","Khmer UI",system-ui,sans-serif';
   const c=document.createElement('canvas'), x=c.getContext('2d');
-  let fs=Math.round(W*0.05);
-  if(cap){ x.font='700 '+fs+'px '+fam; while(x.measureText(cap).width>W && fs>Math.round(W*0.03)){ fs-=2; x.font='700 '+fs+'px '+fam; } }
-  const band=cap?Math.round(fs*1.9):b;
-  c.width=W+2*b; c.height=H+b+band;
-  x.fillStyle=color; x.fillRect(0,0,c.width,c.height);
-  x.drawImage(im,b,b,W,H);
+  c.width=W; c.height=H;
+  x.drawImage(im,0,0,W,H);
   if(cap){
-    x.font='700 '+fs+'px '+fam; x.fillStyle='#fff'; x.textAlign='center'; x.textBaseline='middle';
-    x.fillText(cap,c.width/2,b+H+band/2,W);
+    let base=Math.round(W*0.05);
+    x.font='700 '+base+'px '+fam;
+    while(x.measureText(cap).width>W*0.94 && base>Math.round(W*0.02)){ base-=2; x.font='700 '+base+'px '+fam; }
+    const fs=Math.max(8,Math.round(base*f.s));
+    x.font='700 '+fs+'px '+fam; x.textAlign='center'; x.textBaseline='middle';
+    const px=W/2+f.dx*W/100, py=H-base*1.1+f.dy*H/100;
+    x.lineJoin='round'; x.lineWidth=Math.max(2,fs*0.16); x.strokeStyle=color; x.strokeText(cap,px,py);
+    x.fillStyle='#fff'; x.fillText(cap,px,py);
   }
   return new Promise(res=>mime==='image/png' ? c.toBlob(res,'image/png') : c.toBlob(res,'image/jpeg',0.9));
 }
 
-/* ---------- Save framed photos as PNG (per box, or both boxes at once) ---------- */
+/* ---------- Save photos with text as PNG (per box, or both boxes at once) ---------- */
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
 const safeName = s => String(s||'').trim().replace(/[\\/:*?"<>|\s]+/g,'_').replace(/^_+|_+$/g,'');
 async function savePNGs(groups){
@@ -285,7 +295,7 @@ async function savePNGs(groups){
   const cnt={}, files=[];
   try{
     for(const p of list){
-      const b=await stampBlob(p.blob,capOf(p.group),GROUPS[p.group].color,'image/png');
+      const b=await stampBlob(p.blob,capOf(p.group),GROUPS[p.group].color,'image/png',fmt[p.group]);
       if(!b) throw new Error('png-null');
       cnt[p.group]=(cnt[p.group]||0)+1;
       const nm=['VET',car?safeName(car):'',stampDate,p.group,cnt[p.group]].filter(Boolean).join('_')+'.png';
@@ -305,7 +315,7 @@ async function prepareStamped(){
   for(const p of photos){
     const e=stamped.get(p.id);
     if(e && e.key===keyOf(p.group)) continue;
-    try{ const b=await stampBlob(p.blob,capOf(p.group),GROUPS[p.group].color); stamped.set(p.id,{key:keyOf(p.group),blob:b}); }catch(err){}
+    try{ const b=await stampBlob(p.blob,capOf(p.group),GROUPS[p.group].color,undefined,fmt[p.group]); stamped.set(p.id,{key:keyOf(p.group),blob:b}); }catch(err){}
   }
 }
 async function addPhoto(g,blob){
@@ -336,37 +346,62 @@ function resetAll(){
 }
 $('btnResetAll').onclick=resetAll;
 async function openLightbox(p){
-  const b=await stampBlob(p.blob,capOf(p.group),GROUPS[p.group].color);
+  const b=await stampBlob(p.blob,capOf(p.group),GROUPS[p.group].color,undefined,fmt[p.group]);
   if(lbUrl) URL.revokeObjectURL(lbUrl);
   lbUrl=URL.createObjectURL(b); $('lbImg').src=lbUrl; $('lightbox').hidden=false;
 }
 $('lbClose').onclick=()=>{ $('lightbox').hidden=true; };
 $('lightbox').addEventListener('click',e=>{ if(e.target.id==='lightbox') $('lightbox').hidden=true; });
 
+function fmtRow(g){
+  const f=fmt[g];
+  const mk=(label,title,fn)=>h('button',{class:'btn',title,onclick:()=>{
+    fn(f);
+    f.s=Math.round(Math.min(3,Math.max(0.4,f.s))*100)/100;
+    f.dx=Math.max(-50,Math.min(50,f.dx)); f.dy=Math.max(-50,Math.min(50,f.dy));
+    saveFmt(); schedulePrepare(); refreshThumbs();
+  }},label);
+  return h('div',{class:'fmt'},
+    mk('A−','អក្សរតូច',f=>f.s-=0.05), mk('A+','អក្សរធំ',f=>f.s+=0.05),
+    mk('⬆','ខិតឡើងលើ',f=>f.dy-=2), mk('⬇','ខិតចុះក្រោម',f=>f.dy+=2),
+    mk('⬅','ខិតឆ្វេង',f=>f.dx-=2), mk('➡','ខិតស្តាំ',f=>f.dx+=2),
+    mk('↺','ស្តារទំហំ/ទីតាំង',f=>{ f.s=1; f.dx=0; f.dy=0; }));
+}
+let thumbT;
+function refreshThumbs(){
+  clearTimeout(thumbT);
+  thumbT=setTimeout(async()=>{
+    await prepareStamped();
+    document.querySelectorAll('.thumb img[data-id]').forEach(im=>{
+      const p=photos.find(x=>x.id===im.dataset.id); if(!p) return;
+      const e=stamped.get(p.id);
+      if(e&&e.blob&&e.key===keyOf(p.group)){ if(im._u) URL.revokeObjectURL(im._u); im._u=URL.createObjectURL(e.blob); im.src=im._u; }
+    });
+  },150);
+}
 function photoPanel(g){
   const cfg=GROUPS[g], list=photos.filter(p=>p.group===g);
   const wrap=h('div',{class:'photos'});
   const shoot=h('button',{class:'btn',onclick:()=>openScanner(g,'photo')},'📸 ថតរូប');
   shoot.disabled=list.length>=cfg.max;
   wrap.append(h('div',{class:'phead'},h('span',{class:'ptitle'},'📸 '+cfg.title+' '+list.length+'/'+cfg.max),shoot));
-  const cap=h('input',{type:'text',class:'capin',value:capOf(g),placeholder:'អក្សរលើ frame (លុបចោលបាន)'});
+  const cap=h('input',{type:'text',class:'capin',value:capOf(g),placeholder:'អក្សរលើរូប (លុបចោលបាន)'});
   cap.addEventListener('input',()=>{
     caps[g]=cap.value; saveCaps();
-    wrap.querySelectorAll('.capov').forEach(o=>{ o.textContent=caps[g]; o.hidden=!caps[g]; });
-    schedulePrepare();
+    schedulePrepare(); refreshThumbs();
   });
   const rst=h('button',{class:'btn pdel',title:'ស្តារអក្សរដើម',onclick:()=>{ caps[g]=cfg.def; saveCaps(); render(); schedulePrepare(); }},'↺');
   wrap.append(h('div',{class:'prow'},cap,rst));
+  wrap.append(fmtRow(g));
   if(list.length){
     const th=h('div',{class:'thumbs'});
     list.forEach(p=>{
-      const ov=h('div',{class:'capov',style:'background:'+cfg.color},capOf(g)); ov.hidden=!capOf(g);
       th.append(h('div',{class:'thumb',style:'border-color:'+cfg.color},
-        h('img',{src:p.url,alt:'',onclick:()=>openLightbox(p)}), ov,
+        h('img',{src:p.url,alt:'','data-id':p.id,onclick:()=>openLightbox(p)}),
         h('button',{class:'tdel',title:'លុបរូប',onclick:()=>delPhoto(p.id)},'✕')));
     });
     wrap.append(th);
-    wrap.append(h('button',{class:'btn primary',onclick:()=>savePNGs([g])},'💾 Save PNG ('+list.length+') ជាមួយ frame'));
+    wrap.append(h('button',{class:'btn primary',onclick:()=>savePNGs([g])},'💾 Save PNG ('+list.length+') ជាមួយអក្សរ'));
   }
   return wrap;
 }
@@ -523,7 +558,7 @@ function render(){
     box.append(card);
   });
   box.append(extraCard());
-  updateAlbumBtn();
+  updateAlbumBtn(); refreshThumbs();
 }
 render();
 
@@ -715,7 +750,7 @@ $('btnCopy').onclick=async()=>{
   try{ await navigator.clipboard.writeText(t); toast('បានចម្លង'); }
   catch(e){ const ta=h('textarea',{},t); document.body.append(ta); ta.select(); try{document.execCommand('copy');toast('បានចម្លង');}catch(_){toast('ចម្លងមិនបាន');} ta.remove(); }
 };
-$('btnSave').onclick=()=>{ saveRows(); saveCaps(); toast('💾 បានរក្សាទុក'); };
+$('btnSave').onclick=()=>{ saveRows(); saveCaps(); saveFmt(); toast('💾 បានរក្សាទុក'); };
 
 
 
